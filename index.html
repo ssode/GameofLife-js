@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Conway's Game of Life</title>
+
+    <style>
+        html,
+        body {
+            width:100%;
+            text-align: center;
+			background-color: black;
+			color: black;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+        
+        #controlTable {
+            margin: 0 auto;
+            text-align: left;
+        }
+
+        #controlArea {
+            background-color: lightgray;
+            margin: 0 auto;
+            width: 600px;
+        }
+
+        #gameArea {
+            border: 1px solid gray;
+            background-color: black;
+        }
+    </style>
+</head>
+
+<body style="text-align: center;">
+    <canvas id="gameArea" width=600 height=630></canvas><br>
+    <div id="controlArea">
+        <table id="controlTable">
+            <tr>
+                <td> <label>Rows:</label> <input type="number" id="rows_input" min=1 placeholder="Rows" value=50></td>
+                <td> <label>&nbsp;Columns: </label><input type="number" id="cols_input" placeholder="cols" min=1 value=50></td>
+            </tr>
+            <tr>
+                <td><label>Generation Interval (ms):</label></td>
+                <td><input type="number" value=100 min=1 id="interval_input"></td>
+            </tr>
+            <tr>
+                <td><label>Initial chance of life (%):</label></td>
+                <td><input type="number" value=25 min=1 max=100 id="chance_input"></td>
+                <td><input type="checkbox" id="manual_input"><label>Manual</label></td>
+            </tr>
+            <tr>
+                <td><button id="btn_generate">Generate</button></td>
+                <td><button id="btn_start">Start</button></td>
+            </tr>
+        </table>
+
+    </div>
+
+    <script>
+        function GameofLife(ctx) {
+            this.canvas = ctx.canvas;
+            this.ctx = ctx;
+            this.rows = parseInt(document.getElementById("rows_input").value);
+            this.cols = parseInt(document.getElementById("cols_input").value);
+            this.cellWidth = this.canvas.width / this.cols;
+            this.cellHeight = (this.canvas.height - 30) / this.rows;
+            this.manual = document.getElementById("manual_input").checked;
+            this.chance = parseFloat(document.getElementById("chance_input").value) / 100;
+            this.population = 0;
+            this.generation = 1;
+            this.playing = false;
+            this.mouse = { x: 0, y: 0 };
+            this.board = [this.rows];
+            this.loop = null;
+            for (var y = 0; y < this.rows; y++) {
+                this.board[y] = [this.cols];
+                for (var x = 0; x < this.cols; x++) {
+                    if (this.manual) {
+                        this.board[y][x] = 0;
+                    } else {
+                        this.board[y][x] = Math.random() < this.chance ? 1 : 0;
+                    }
+                }
+            }
+            this.draw();
+        }
+
+        GameofLife.prototype.handleMouseMove = function (e) {
+            var rect = this.canvas.getBoundingClientRect();
+            var x = e.clientX - rect.left;
+            var y = e.clientY - rect.top - 30;
+
+            if (y >= 0 && x >= 0) {
+                var a = Math.floor(x / this.cellWidth);
+                var b = Math.floor(y / this.cellHeight);
+                if (a > this.cols - 1)
+                    a = this.cols - 1;
+                if (b > this.rows - 1)
+                    b = this.rows - 1;
+                this.mouse.x = a;
+                this.mouse.y = b;
+                this.ctx.fillStyle = "white";
+                this.ctx.font = "15px Arial";
+                this.ctx.clearRect(this.canvas.width - 100, 0, 100, 29);
+                this.ctx.fillText(`(${this.mouse.x}, ${this.mouse.y})`, this.canvas.width - 80, 20);
+            }
+        }
+
+        GameofLife.prototype.draw = function () {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.font = "15px Arial";
+            this.ctx.fillStyle = "white";
+            this.ctx.fillText("Current Generation: " + this.generation, 5, 20);
+            this.ctx.fillText("Population: " + this.population, this.canvas.width / 2, 20);
+            this.ctx.fillText(`(${this.mouse.x}, ${this.mouse.y})`, this.canvas.width - 80, 20);
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = "gray";
+            this.ctx.lineWidth = 0.8;
+            for (var i = 0; i <= this.rows; i++) {
+                this.ctx.moveTo(0, this.cellHeight * i + 30);
+                this.ctx.lineTo(this.canvas.width, this.cellHeight * i + 30);
+            }
+            for (var j = 0; j <= this.cols; j++) {
+                this.ctx.moveTo(this.cellWidth * j, 30);
+                this.ctx.lineTo(this.cellWidth * j, this.canvas.height)
+            }
+            this.ctx.stroke();
+            this.ctx.fillStyle = "white";
+            for (var x = 0; x < this.cols; x++) {
+                for (var y = 0; y < this.rows; y++) {
+                    if (this.board[y][x] === 1) {
+                        this.ctx.fillRect(x * this.cellWidth + 1, y * this.cellHeight + 31, this.cellWidth - 2, this.cellHeight - 2);
+                    }
+                }
+            }
+        }
+
+        GameofLife.prototype.advance = function () {
+            var next_gen = [this.rows];
+            var count = 0;
+            for (var y = 0; y < this.rows; y++) {
+                next_gen[y] = [this.cols];
+                for (var x = 0; x < this.cols; x++) {
+                    var neighbors = 0;
+                    for (var i = -1; i <= 1; i++) {
+                        for (var j = -1; j <= 1; j++) {
+                            if (this.board[mod(y + i, this.rows)][mod(x + j, this.cols)] === 1) neighbors++;
+                        }
+                    }
+                    if (this.board[y][x] === 1) {
+                        if (neighbors === 3 || neighbors === 4) {
+                            next_gen[y][x] = 1;
+                            count++;
+                        } else {
+                            next_gen[y][x] = 0;
+                        }
+                    } else {
+                        if (neighbors === 3) {
+                            next_gen[y][x] = 1;
+                            count++;
+                        } else {
+                            next_gen[y][x] = 0;
+                        }
+                    }
+                }
+            }
+            this.board = next_gen;
+            this.generation++;
+            this.population = count;
+        }
+
+        // our own modulus function because JS mod returns negative values
+        function mod(n, m) {
+            return ((n % m) + m) % m;
+        }
+
+        (function () {
+            var ctx = document.querySelector("canvas").getContext("2d");
+            var game = new GameofLife(ctx);
+            var btn_start = document.getElementById("btn_start");
+            var btn_gen = document.getElementById("btn_generate");
+            var interval_input = document.getElementById("interval_input");
+            ctx.canvas.addEventListener("mousemove", (e) => game.handleMouseMove(e));
+            ctx.canvas.addEventListener("click", function (e) {
+                if (!game.playing && game.manual) {
+                    var rect = ctx.canvas.getBoundingClientRect();
+                    var x = e.clientX - rect.left;
+                    var y = e.clientY - rect.top - 30;
+                    if (y >= 0 && x >= 0) {
+                        var a = Math.floor(x / game.cellWidth);
+                        var b = Math.floor(y / game.cellHeight);
+                        if (game.board[b][a] === 1) {
+                            game.board[b][a] = 0;
+                            game.board.population--;
+                        } else {
+                            game.board[b][a] = 1;
+                            game.board.population++;
+                        }
+                        game.draw();
+                    }
+                }
+            });
+            btn_gen.addEventListener("click", () => {
+                if (!game.playing) {
+                    game = new GameofLife(ctx);
+                    game.draw();
+                }
+            });
+            btn_start.addEventListener("click", () => {
+                if (game.playing === true) {
+                    game.playing = false;
+                    btn_start.innerHTML = "Start";
+                    btn_gen.disabled = false;
+                    clearInterval(game.loop);
+                } else {
+                    game.playing = true;
+                    btn_start.innerHTML = "Stop";
+                    btn_gen.disabled = true;
+                    game.loop = setInterval(() => {
+                        game.draw();
+                        game.advance();
+                    }, parseInt(interval_input.value));
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>
